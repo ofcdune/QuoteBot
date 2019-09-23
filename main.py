@@ -68,9 +68,17 @@ class Core(commands.Cog):
     @commands.command()
     @commands.bot_has_permissions(send_messages=True)
     async def invite(self, ctx):
-        """Shows the invite link for this bot"""
+        """Shows the invite link for this bot if you like it"""
         await ctx.send(
             "My invite link is https://discordapp.com/api/oauth2/authorize?client_id=625112945881382912&permissions=18432&scope=bot")
+
+        return 0
+
+    @commands.command()
+    @commands.bot_has_permissions(send_messages=True)
+    async def vote(self, ctx):
+        """Shows the link to vote for this bot if you really like it"""
+        await ctx.send("My link to vote is https://discordbots.org/bot/625112945881382912")
 
         return 0
 
