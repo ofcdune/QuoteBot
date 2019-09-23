@@ -104,6 +104,7 @@ class Customizing(commands.Cog):
     @commands.command()
     @commands.has_permissions(manage_channels=True)
     @commands.bot_has_permissions(send_messages=True)
+    @commands.cooldown(1, 2, commands.BucketType.default)
     async def setchannel(self, ctx):
         """Lets a user define the quotes channel
 
@@ -122,6 +123,7 @@ class Customizing(commands.Cog):
     @commands.command()
     @commands.has_permissions(manage_emojis=True)
     @commands.bot_has_permissions(send_messages=True)
+    @commands.cooldown(1, 2, commands.BucketType.default)
     async def setemoji(self, ctx, emoji):
         """Lets a user define the emoji the user have to react with
         in order to let the bot quote it
@@ -144,6 +146,7 @@ class Customizing(commands.Cog):
     @commands.command()
     @commands.has_permissions(manage_channels=True)
     @commands.bot_has_permissions(send_messages=True)
+    @commands.cooldown(1, 2, commands.BucketType.default)
     async def setminreact(self, ctx, minimum):
         """Lets a user define how many users have to react
         to a message to let the bot quote it
@@ -165,6 +168,7 @@ class Customizing(commands.Cog):
 
     @commands.command()
     @commands.bot_has_permissions(send_messages=True, embed_links=True)
+    @commands.cooldown(1, 2, commands.BucketType.default)
     async def settings(self, ctx):
         """Shows the current settings for the server triggered in"""
 
@@ -248,6 +252,7 @@ setup(bot)
 # on_reaction_add           #
 # on_guild_join             #
 # on_guild_remove           #
+# on_command_error          #
 #############################
 
 @bot.event
@@ -325,6 +330,22 @@ async def on_guild_remove(guild):
     with open("Settings/Settings.json", "w") as f_file:
         json.dump(s_settings, f_file)
     return 0
+
+#########################################
+# Most errors should happen silently    #
+# and only show up on the console       #
+#########################################
+
+@bot.event
+async def on_command_error(ctx, error):
+
+    if error == commands.CommandOnCooldown:
+        await ctx.send(f"{error}")
+    if ctx.command is not None:
+        print(f"[ERROR]: During handling of command {ctx.command.name} in guild {ctx.guild.id}"
+              f" happened following error: \n{error}\n")
+    else:
+        print(f"[ERROR]: command '{ctx.message.content}' not found\n")
 
 #####################
 # Bot starting loop #
