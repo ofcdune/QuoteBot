@@ -283,9 +283,6 @@ async def on_reaction_add(reaction, member):
     with open("Settings/Settings.json", "r") as file:
         settings = json.load(file)
 
-    # temporary list for messages that are already quoted
-    messagelist = []
-
     # if the reaction is in the quote channel, it will get ignored
     if reaction.message.channel.id == settings[f"{reaction.message.guild.id}"]["channel_id"]:
         return 0
