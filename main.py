@@ -87,11 +87,13 @@ class Core(commands.Cog):
     async def help(self, ctx):
         """Help message and tutorial"""
 
-        await ctx.send("This bot lets you 'quote' a message by either reacting "
+        if not ctx.message.author.is_on_mobile():
+            await ctx.send("This bot lets you 'quote' a message by either reacting "
                        "with an emoji (default: 🏆) or typing ``!trophy {message_id}``.\n"
                        "To get more information about all available commands,"
                        " just click on 'Watch' on my profile")
-
+        else:
+            await ctx.send("https://www.twitch.tv/quotebot_5599")
         return 0
 
 class Customizing(commands.Cog):
@@ -155,7 +157,7 @@ class Customizing(commands.Cog):
         !setminusers {number}"""
 
         if minimum.isdigit() and int(minimum) > 0:
-            self.settings[f"{ctx.guild.id}"]["min_reaction"] = int(minimum)
+            self.settings[f"{ctx.guild.id}"]["threshold"] = int(minimum)
         else:
             await ctx.send(f"{minimum} is not a number above zero")
             return 0
@@ -174,13 +176,13 @@ class Customizing(commands.Cog):
 
         channel = self.settings[f"{ctx.guild.id}"]["channel_id"]
         emoji = self.settings[f"{ctx.guild.id}"]["emoji"]
-        min_reaction = self.settings[f"{ctx.guild.id}"]["min_reaction"]
+        threshold = self.settings[f"{ctx.guild.id}"]["threshold"]
 
         settings_embed = discord.Embed(
             title=f"Settings for {ctx.guild.name}",
             description=f"\nChannel posting in: <#{channel}>\n\n"
                         f"Emoji to be reacted with: {emoji}\n\n"
-                        f"Minimum amount of users to react: {min_reaction}",
+                        f"Minimum amount of users to react: {threshold}",
             color=ctx.author.color
         )
 
@@ -197,6 +199,9 @@ async def embed_message(guild: discord.Guild, message: discord.Message):
 
     with open("Settings/Settings.json", "r") as file:
         settings = json.load(file)
+
+    if message.id in settings[f"{guild.id}"]["quoted_messages"]:
+        return 0
 
     # Checks if the message has been sent via mobile or desktop
     if message.author.is_on_mobile():
@@ -228,15 +233,26 @@ async def embed_message(guild: discord.Guild, message: discord.Message):
         text=message.id
     )
 
+    # jump to message field
+    msg_embed.add_field(
+        name="Jump to message",
+        value=f"[Jump]({message.jump_url})"
+    )
+
     # Embed author
     msg_embed.set_author(
         name=str(message.author),
-        url=message.jump_url,
         icon_url=message.author.avatar_url
     )
 
     channel = discord.utils.get(guild.text_channels, id=settings[f"{guild.id}"]["channel_id"])
     await channel.send(embed=msg_embed)
+
+    # prevent the message from being sent again
+    settings[f"{guild.id}"]["quoted_messages"].append(message.id)
+    with open("Settings/Settings.json", "w") as file:
+        json.dump(settings, file)
+
     return 0
 
 def setup(discord_bot):
@@ -253,6 +269,7 @@ setup(bot)
 # on_guild_join             #
 # on_guild_remove           #
 # on_command_error          #
+# on_command                #
 #############################
 
 @bot.event
@@ -266,6 +283,13 @@ async def on_reaction_add(reaction, member):
     with open("Settings/Settings.json", "r") as file:
         settings = json.load(file)
 
+    # temporary list for messages that are already quoted
+    messagelist = []
+
+    # if the reaction is in the quote channel, it will get ignored
+    if reaction.message.channel.id == settings[f"{reaction.message.guild.id}"]["channel_id"]:
+        return 0
+
     # Extracts the emoji
     # If the emoji should be custom, the bot searches through the server
     emoji = settings[f"{reaction.message.guild.id}"]["emoji"]
@@ -274,8 +298,13 @@ async def on_reaction_add(reaction, member):
     else:
         emoji = discord.utils.get(reaction.message.guild.emojis, id=int(emoji.split(":")[-1].split(">")[0]))
 
+    # if the message author reacts, it gets ignored
+    count = reaction.count
+    users = await reaction.users().flatten()
+    if reaction.message.author in users:
+        count -= 1
 
-    if reaction.emoji == emoji and reaction.count == settings[f"{reaction.message.guild.id}"]["min_reaction"]:
+    if reaction.emoji == emoji and count == settings[f"{reaction.message.guild.id}"]["threshold"]:
 
         # when the channel is not defined, the bot notifies of this and returns
         if settings[f"{reaction.message.guild.id}"]["channel_id"] == 0:
@@ -304,11 +333,18 @@ async def on_guild_join(guild):
         s_settings = json.load(f_file)
 
         if len(guild.members) > 7:
-            min_reaction = int(len(guild.members)/4)
+            threshold = int(len(guild.members)/4)
         else:
-            min_reaction = len(guild.members)
+            threshold = len(guild.members)
 
-        new_guild_dict = {f"{guild.id}":{"channel_id": 0, "emoji": ":trophy:", "min_reaction": min_reaction}}
+        new_guild_dict = {f"{guild.id}":
+                              {
+                                  "channel_id": 0,
+                                  "emoji": ":trophy:",
+                                  "threshold": threshold,
+                                  "quoted_messages": []
+                              }
+        }
         s_settings.update(new_guild_dict)
 
     with open("Settings/Settings.json", "w") as f_file:
@@ -342,10 +378,22 @@ async def on_command_error(ctx, error):
     if error == commands.CommandOnCooldown:
         await ctx.send(f"{error}")
     if ctx.command is not None:
-        print(f"[ERROR]: During handling of command {ctx.command.name} in guild {ctx.guild.id}"
+        print(f"[COMMAND ERROR]: During handling of command {ctx.command.name} in guild {ctx.guild.id}"
               f" happened following error: \n{error}\n")
     else:
-        print(f"[ERROR]: command '{ctx.message.content}' not found\n")
+        print(f"[COMMAND ERROR]: command '{ctx.message.content}' not found\n")
+
+#############################################
+# This event is simply for logging reasons  #
+#############################################
+
+@bot.event
+async def on_command_completion(ctx):
+
+    print(f"[COMMAND FINISHED]: Command {ctx.command.name}")
+    print(f"{ctx.message.content}")
+    print(f"{ctx.message} by {ctx.message.author} in guild {ctx.guild.name} (id={ctx.guild.id})")
+
 
 #####################
 # Bot starting loop #
