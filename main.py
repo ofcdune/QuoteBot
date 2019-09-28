@@ -52,8 +52,6 @@ class Core(commands.Cog):
         The message must either be:
         -   a valid ID
         -   a valid message link"""
-        await ctx.send("Successfully")
-
         message = await commands.MessageConverter().convert(ctx, message)
 
         if self.settings[f"{ctx.guild.id}"]["channel_id"] == 0:
@@ -224,10 +222,6 @@ async def embed_message(guild: discord.Guild, message: discord.Message):
             value=message.activity["party_id"]
         )
 
-    # If message contains pictures
-    for image in message.attachments:
-        msg_embed.set_image(url=image.url)
-
     # Embed footer
     msg_embed.set_footer(
         text=message.id
@@ -238,6 +232,10 @@ async def embed_message(guild: discord.Guild, message: discord.Message):
         name="Jump to message",
         value=f"[Jump]({message.jump_url})"
     )
+
+    # If message contains pictures
+    for image in message.attachments:
+        msg_embed.set_image(url=image.url)
 
     # Embed author
     msg_embed.set_author(
@@ -372,13 +370,15 @@ async def on_guild_remove(guild):
 @bot.event
 async def on_command_error(ctx, error):
 
-    if error == commands.CommandOnCooldown:
-        await ctx.send(f"{error}")
     if ctx.command is not None:
-        print(f"[COMMAND ERROR]: During handling of command {ctx.command.name} in guild {ctx.guild.id}"
+        print(f"[COMMAND ERROR]: During handling of command '{ctx.command.name}' in guild {ctx.guild.id}"
               f" happened following error: \n{error}\n")
+        print(f"{error}")
     else:
         print(f"[COMMAND ERROR]: command '{ctx.message.content}' not found\n")
+
+    if error == commands.MissingRequiredArgument and ctx.command.name == "trophy":
+        await bot.invoke(ctx)
 
 #############################################
 # This event is simply for logging reasons  #
@@ -388,8 +388,7 @@ async def on_command_error(ctx, error):
 async def on_command_completion(ctx):
 
     print(f"[COMMAND FINISHED]: Command {ctx.command.name}")
-    print(f"{ctx.message.content}")
-    print(f"{ctx.message} by {ctx.message.author} in guild {ctx.guild.name} (id={ctx.guild.id})")
+    print(f"'{ctx.message.content}' by {ctx.message.author} in guild {ctx.guild.name} (id={ctx.guild.id})")
 
 
 #####################
