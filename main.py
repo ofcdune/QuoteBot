@@ -115,7 +115,7 @@ class Customizing(commands.Cog):
         self.settings[f"{ctx.guild.id}"]["channel_id"] = ctx.channel.id
 
         with open("Settings/Settings.json", "w") as file:
-            json.dump(self.settings, file)
+            json.dump(self.settings, file, , indent=4, sort_keys=True)
             await ctx.send(f"New quotes channel successfully set to {ctx.channel.mention}")
 
         return 0
@@ -138,7 +138,7 @@ class Customizing(commands.Cog):
         self.settings[f"{ctx.guild.id}"]["emoji"] = emoji
 
         with open("Settings/Settings.json", "w") as file:
-            json.dump(self.settings, file)
+            json.dump(self.settings, file, indent=4, sort_keys=True)
             await ctx.send(f"New reaction emoji successfully set to {emoji}")
 
         return 0
@@ -161,7 +161,7 @@ class Customizing(commands.Cog):
             return 0
 
         with open("Settings/Settings.json", "w") as file:
-            json.dump(self.settings, file)
+            json.dump(self.settings, file, indent=4, sort_keys=True)
             await ctx.send(f"Minimum amount of reactions successfully set to {minimum}")
 
         return 0
@@ -249,7 +249,7 @@ async def embed_message(guild: discord.Guild, message: discord.Message):
     # prevent the message from being sent again
     settings[f"{guild.id}"]["quoted_messages"].append(message.id)
     with open("Settings/Settings.json", "w") as file:
-        json.dump(settings, file)
+        json.dump(settings, file, indent=4, sort_keys=True)
 
     return 0
 
@@ -344,7 +344,7 @@ async def on_guild_join(guild):
         s_settings.update(new_guild_dict)
 
     with open("Settings/Settings.json", "w") as f_file:
-        json.dump(s_settings, f_file)
+        json.dump(s_settings, f_file, indent=4, sort_keys=True)
 
     return 0
 
@@ -361,7 +361,7 @@ async def on_guild_remove(guild):
         del s_settings[f"{guild.id}"]
 
     with open("Settings/Settings.json", "w") as f_file:
-        json.dump(s_settings, f_file)
+        json.dump(s_settings, f_file, indent=4, sort_keys=True)
 
     return 0
 
