@@ -115,7 +115,7 @@ class Customizing(commands.Cog):
         self.settings[f"{ctx.guild.id}"]["channel_id"] = ctx.channel.id
 
         with open("Settings/Settings.json", "w") as file:
-            json.dump(self.settings, file, , indent=4, sort_keys=True)
+            json.dump(self.settings, file, indent=4, sort_keys=True)
             await ctx.send(f"New quotes channel successfully set to {ctx.channel.mention}")
 
         return 0
@@ -194,7 +194,6 @@ class Customizing(commands.Cog):
         return 0
 
 async def embed_message(guild: discord.Guild, message: discord.Message):
-
     with open("Settings/Settings.json", "r") as file:
         settings = json.load(file)
 
@@ -209,8 +208,8 @@ async def embed_message(guild: discord.Guild, message: discord.Message):
 
     # Embed body
     msg_embed = discord.Embed(
-        title=f"In #{message.channel} via {emoji}",
-        description=f"{message.content}",
+        title="Jump to message",
+        description=f"[Jump]({message.jump_url})",
         color=message.author.color,
         timestamp=message.created_at
     )
@@ -229,8 +228,8 @@ async def embed_message(guild: discord.Guild, message: discord.Message):
 
     # jump to message field
     msg_embed.add_field(
-        name="Jump to message",
-        value=f"[Jump]({message.jump_url})"
+        name=f"In #{message.channel} via {emoji}",
+        value=f"{message.content}"
     )
 
     # If message contains pictures
@@ -378,7 +377,7 @@ async def on_command_error(ctx, error):
               f" happened following error: \n{error}\n")
         print(f"{error}")
     else:
-        await ctx.send(f"[COMMAND ERROR]: command '{ctx.message.content}' not found\n")
+        print(f"[COMMAND ERROR]: command '{ctx.message.content}' not found\n")
 
     if error == commands.MissingRequiredArgument and ctx.command.name == "trophy":
         await bot.invoke(ctx)
