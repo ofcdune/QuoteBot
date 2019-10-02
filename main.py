@@ -267,7 +267,6 @@ setup(bot)
 # on_guild_join             #
 # on_guild_remove           #
 # on_command_error          #
-# on_command                #
 #############################
 
 @bot.event
@@ -375,24 +374,11 @@ async def on_command_error(ctx, error):
     if ctx.command is not None:
         await ctx.send(f"[COMMAND ERROR]: During handling of command '{ctx.command.name}' in guild {ctx.guild.id}"
               f" happened following error: \n{error}\n")
-        print(f"{error}")
     else:
-        print(f"[COMMAND ERROR]: command '{ctx.message.content}' not found\n")
+        await ctx.send(f"[COMMAND ERROR]: command '{ctx.message.content}' not found\n")
 
     if error == commands.MissingRequiredArgument and ctx.command.name == "trophy":
         await bot.invoke(ctx)
-
-    return 0
-
-#############################################
-# This event is simply for logging reasons  #
-#############################################
-
-@bot.event
-async def on_command_completion(ctx):
-
-    print(f"[COMMAND FINISHED]: Command {ctx.command.name}")
-    print(f"'{ctx.message.content}' by {ctx.message.author} in guild {ctx.guild.name} (id={ctx.guild.id})")
 
     return 0
 
