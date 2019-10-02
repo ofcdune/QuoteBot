@@ -39,8 +39,6 @@ class Core(commands.Cog):
 
     def __init__(self, discord_bot):
         self.bot = discord_bot
-        with open("Settings/Settings.json", "r") as file:
-            self.settings = json.load(file)
 
     @commands.command()
     @commands.bot_has_permissions(send_messages=True,
@@ -52,9 +50,13 @@ class Core(commands.Cog):
         The message must either be:
         -   a valid ID
         -   a valid message link"""
+
+        with open("Settings/Settings.json", "r") as file:
+            settings_trophy = json.load(file)
+
         message = await commands.MessageConverter().convert(ctx, message)
 
-        if self.settings[f"{ctx.guild.id}"]["channel_id"] == 0:
+        if settings_trophy[f"{ctx.guild.id}"]["channel_id"] == 0:
             await ctx.send("The quotation channel has not been defined,\n"
                            "to do this, type ``!setchannel`` in the desired channel.\n"
                            "(Manage server permissions required)")
@@ -98,8 +100,6 @@ class Customizing(commands.Cog):
 
     def __init__(self, discord_bot):
         self.bot = discord_bot
-        with open("Settings/Settings.json", "r") as file:
-            self.settings = json.load(file)
 
     @commands.command()
     @commands.has_permissions(manage_channels=True)
@@ -112,10 +112,12 @@ class Customizing(commands.Cog):
         !setchannel
         in the desired channel"""
 
-        self.settings[f"{ctx.guild.id}"]["channel_id"] = ctx.channel.id
+        settings_setchannel = load_settings()
+
+        settings_setchannel[f"{ctx.guild.id}"]["channel_id"] = ctx.channel.id
 
         with open("Settings/Settings.json", "w") as file:
-            json.dump(self.settings, file)
+            json.dump(settings_setchannel, file)
             await ctx.send(f"New quotes channel successfully set to {ctx.channel.mention}")
 
         return 0
@@ -131,14 +133,16 @@ class Customizing(commands.Cog):
         Usage:
         !setemoji {emoji}"""
 
+        settings_setemoji = load_settings()
+
         # if the emoji is a normal (no custom) emoji
         if not emoji.startswith("<"):
             emoji = emojis.decode(emoji)
 
-        self.settings[f"{ctx.guild.id}"]["emoji"] = emoji
+        settings_setemoji[f"{ctx.guild.id}"]["emoji"] = emoji
 
         with open("Settings/Settings.json", "w") as file:
-            json.dump(self.settings, file)
+            json.dump(settings_setemoji, file)
             await ctx.send(f"New reaction emoji successfully set to {emoji}")
 
         return 0
@@ -154,14 +158,16 @@ class Customizing(commands.Cog):
         Usage:
         !setminusers {number}"""
 
+        settings_minreact = load_settings()
+
         if minimum.isdigit() and int(minimum) > 0:
-            self.settings[f"{ctx.guild.id}"]["threshold"] = int(minimum)
+            settings_minreact[f"{ctx.guild.id}"]["threshold"] = int(minimum)
         else:
             await ctx.send(f"{minimum} is not a number above zero")
             return 0
 
         with open("Settings/Settings.json", "w") as file:
-            json.dump(self.settings, file)
+            json.dump(settings_minreact, file)
             await ctx.send(f"Minimum amount of reactions successfully set to {minimum}")
 
         return 0
@@ -172,9 +178,11 @@ class Customizing(commands.Cog):
     async def settings(self, ctx):
         """Shows the current settings for the server triggered in"""
 
-        channel = self.settings[f"{ctx.guild.id}"]["channel_id"]
-        emoji = self.settings[f"{ctx.guild.id}"]["emoji"]
-        threshold = self.settings[f"{ctx.guild.id}"]["threshold"]
+        settings_settings = load_settings()
+
+        channel = settings_settings[f"{ctx.guild.id}"]["channel_id"]
+        emoji = settings_settings[f"{ctx.guild.id}"]["emoji"]
+        threshold = settings_settings[f"{ctx.guild.id}"]["threshold"]
 
         settings_embed = discord.Embed(
             title=f"Settings for {ctx.guild.name}",
@@ -193,9 +201,16 @@ class Customizing(commands.Cog):
 
         return 0
 
-async def embed_message(guild: discord.Guild, message: discord.Message):
+# Loads up the settings for the bot
+def load_settings():
     with open("Settings/Settings.json", "r") as file:
         settings = json.load(file)
+    return settings
+
+# Generates the message embed
+async def embed_message(guild: discord.Guild, message: discord.Message):
+
+    settings = load_settings()
 
     if message.id in settings[f"{guild.id}"]["quoted_messages"]:
         return 0
@@ -278,8 +293,7 @@ async def on_ready():
 @bot.event
 async def on_reaction_add(reaction, member):
 
-    with open("Settings/Settings.json", "r") as file:
-        settings = json.load(file)
+    settings = load_settings()
 
     # if the reaction is in the quote channel, it will get ignored
     if reaction.message.channel.id == settings[f"{reaction.message.guild.id}"]["channel_id"]:
@@ -354,10 +368,8 @@ async def on_guild_join(guild):
 
 @bot.event
 async def on_guild_remove(guild):
-
-    with open("Settings/Settings.json", "r") as f_file:
-        s_settings = json.load(f_file)
-        del s_settings[f"{guild.id}"]
+    s_settings = load_settings()
+    del s_settings[f"{guild.id}"]
 
     with open("Settings/Settings.json", "w") as f_file:
         json.dump(s_settings, f_file)
