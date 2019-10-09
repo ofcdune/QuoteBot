@@ -4,6 +4,8 @@ import asyncio
 import json
 import emojis
 import bottoken
+from io import StringIO
+import sys
 
 # Initialising and defining the bot
 bot = commands.Bot(owner_id=311268449181630464,
@@ -20,11 +22,24 @@ class System(commands.Cog):
 
     @commands.command()
     @commands.is_owner()
-    async def execute(self, ctx):
+    async def exec(self, ctx):
         """Executes the given code in the discord message"""
 
         command = ctx.message.content.split("``")[1]
-        exec(command) # troubleshooting
+	
+	# redirects the output
+        old_out = sys.stdout
+        result = StringIO()
+        sys.stdout = result
+
+        exec(command)  # troubleshooting
+
+	# redirects the output again
+        sys.stdout = old_out
+
+	# gets the result of the command
+        result_string = result.getvalue()
+        await ctx.send(result_string)
 
     @commands.command()
     @commands.is_owner()
@@ -173,6 +188,32 @@ class Customizing(commands.Cog):
         return 0
 
     @commands.command()
+    @commands.has_permissions(manage_channels=True)
+    @commands.bot_has_permissions(send_messages=True)
+    @commands.cooldown(1, 2, commands.BucketType.default)
+    async def setownreact(self, ctx, argument):
+        """Lets a user define if the guild allows to define
+        if the bot ignores messages, that have been reacted upon by the message auhthor
+        or not
+
+        Usage: !setownreact {"ON/OFF"} """
+
+        settings_setownreact = load_settings()
+
+        if argument.lower() == "on":
+            settings_setownreact[f"{ctx.guild.id}"]["react_to_own"] = 1
+            reply = "on"
+        else:
+            settings_setownreact[f"{ctx.guild.id}"]["react_to_own"] = 0
+            reply = "off"
+
+        with open("Settings/Settings.json", "w") as file:
+            json.dump(settings_setownreact, file)
+            await ctx.send(f"Self reacting successfully turned {reply}")
+
+        return 0
+
+    @commands.command()
     @commands.bot_has_permissions(send_messages=True, embed_links=True)
     @commands.cooldown(1, 2, commands.BucketType.default)
     async def settings(self, ctx):
@@ -183,12 +224,17 @@ class Customizing(commands.Cog):
         channel = settings_settings[f"{ctx.guild.id}"]["channel_id"]
         emoji = settings_settings[f"{ctx.guild.id}"]["emoji"]
         threshold = settings_settings[f"{ctx.guild.id}"]["threshold"]
+        if settings_settings[f"{ctx.guild.id}"]["react_to_own"] == 0:
+            selfreact = ":regional_indicator_x:"
+        else:
+            selfreact = ":ballot_box_with_check:"
 
         settings_embed = discord.Embed(
             title=f"Settings for {ctx.guild.name}",
             description=f"\nChannel posting in: <#{channel}>\n\n"
                         f"Emoji to be reacted with: {emoji}\n\n"
-                        f"Minimum amount of users to react: {threshold}",
+                        f"Minimum amount of users to react: {threshold}\n\n"
+                        f"Can react to own message: {selfreact}",
             color=ctx.author.color
         )
 
@@ -223,8 +269,8 @@ async def embed_message(guild: discord.Guild, message: discord.Message):
 
     # Embed body
     msg_embed = discord.Embed(
-        title="Jump to message",
-        description=f"[Jump]({message.jump_url})",
+        title=f"In #{message.channel} via {emoji}",
+        description=f"[Jump to message]({message.jump_url})",
         color=message.author.color,
         timestamp=message.created_at
     )
@@ -241,10 +287,10 @@ async def embed_message(guild: discord.Guild, message: discord.Message):
         text=message.id
     )
 
-    # if message contained text
+    # if message contains text
     if message.content != "":
         msg_embed.add_field(
-            name=f"In #{message.channel} via {emoji}",
+            name=f"Content:",
             value=f"{message.content}"
         )
 
@@ -307,11 +353,12 @@ async def on_reaction_add(reaction, member):
     else:
         emoji = discord.utils.get(reaction.message.guild.emojis, id=int(emoji.split(":")[-1].split(">")[0]))
 
-    # if the message author reacts, it gets ignored
     count = reaction.count
-    users = await reaction.users().flatten()
-    if reaction.message.author in users:
-        count -= 1
+    # if the message author reacts and the guild specified it before, it gets ignored,
+    if settings[f"{reaction.message.guild.id}"]["react_to_own"] == 0:
+        users = await reaction.users().flatten()
+        if reaction.message.author in users:
+            count -= 1
 
     if reaction.emoji == emoji and count == settings[f"{reaction.message.guild.id}"]["threshold"]:
 
@@ -351,7 +398,8 @@ async def on_guild_join(guild):
                                   "channel_id": 0,
                                   "emoji": ":trophy:",
                                   "threshold": threshold,
-                                  "quoted_messages": []
+                                  "quoted_messages": [],
+                                  "react_to_own": 0
                               }
         }
         s_settings.update(new_guild_dict)
