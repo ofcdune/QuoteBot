@@ -149,25 +149,20 @@ class Core(commands.Cog):
     async def help(self, ctx):
         """Help message and tutorial"""
 
-        if not ctx.message.author.is_on_mobile():
-
-            try:
-                await ctx.send("This bot lets you 'quote' a message by either reacting "
-                           "with an emoji (default: 🏆) or typing ``!trophy {message_id}``.\n"
-                           "To get more information about all available commands,"
-                           " just click on 'Watch' on my profile")
-            except discord.Forbidden:
-                return 0
-
-        else:
-
-            try:
-                await ctx.send("This bot lets you 'quote' a message by either reacting "
-                           "with an emoji (default: 🏆) or typing ``!trophy {message_id}``.\n"
-                           "To get more information about all available commands,"
-                           " just visit my twitch profile: https://www.twitch.tv/quotebot_5599")
-            except discord.Forbidden:
-                return 0
+        try:
+            await ctx.send("This bot lets you react to a certain message with an emoji (default :trophy:) and post it into a "
+                           "custom starboard channel. You are completely free in customization whatsoever.\n"
+                           "You find the link to my help page by clicking 'watch' on my profile or by using this link: https://www.twitch.tv/quotebot_5599\n\n"
+                           ":warning: If it doesnt work when reacting to a message, make sure you checked the following:\n"
+                           "- First, make sure the bot is able to __**VIEW**__ the channel it is supposed to create embeds of (general chat, etc)\n"
+                           "- Second, make sure that the one who created the message did not react to it. On default, the bot ignores it but you can"
+                           " change that behaviour\n"
+                           "- Third, make sure you are not writing and reacting in the channel the bot is posting the embeds. If you react there, the"
+                           " reactions get ignored too\n\n"
+                           "If you still have troubles setting up the bot, please refer to the support server (can be found with ``!vote``, you dont need"
+                           " to vote, I just dont want to advertise my server here)")
+        except discord.Forbidden:
+            return 0
 
         return 0
 
