@@ -25,24 +25,48 @@ class System(commands.Cog):
 
     @commands.command()
     @commands.is_owner()
-    async def exec(self, ctx):
+    async def exec(self, ctx, *, command):
         """Executes the given code in the discord message"""
 
-        command = ctx.message.content.split("```")[1]
+        command = command.split("```python")[1]
+        command = command.split("```")[0]
 
         # redirects the output
         old_out = sys.stdout
         result = StringIO()
         sys.stdout = result
 
-        exec(command)  # troubleshooting
+        # execute the commands
+        exec(command)
 
         # redirects the output again
         sys.stdout = old_out
 
         # gets the result of the command
         result_string = result.getvalue()
-        await ctx.send(result_string)
+
+        if result_string == "":
+            result_string = "N/A"
+
+        # result embed
+        result_embed = discord.Embed(
+            title="Code evaluated successfully",
+            description=f"```python\n"
+                        f">>> {result_string}```",
+            color=ctx.author.color,
+            timestamp=ctx.message.created_at
+        )
+
+        result_embed.set_author(
+            name=f"Python version: {sys.version.split()[0]}",
+            icon_url="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/2000px-Python-logo-notext.svg.png"
+        )
+
+        result_embed.set_footer(
+            text=f"CPU info: {sys.version.split('[')[1].split(']')[0]}",
+        )
+
+        await ctx.send(embed=result_embed)
 
         return 0
 
@@ -59,7 +83,7 @@ class System(commands.Cog):
 
     @commands.command()
     @commands.is_owner()
-    async def gc(self, ctx):
+    async def guildcount(self, ctx):
         """Counts the guilds the bot is in"""
 
         await ctx.send(f"The bot is currently in {len(bot.guilds)} guilds")
@@ -76,15 +100,27 @@ class DiscordBotsOrgAPI(commands.Cog):
         self.updating = self.bot.loop.create_task(self.update_stats())
 
     async def update_stats(self):
-        """This function runs every 30 minutes to automatically update the server count"""
+        """This function runs every 10 minutes to automatically update the server count"""
         while not self.bot.is_closed():
+            print(f"{datetime.datetime.now()} > Attempting to update server count")
             try:
                 await self.dblpy.post_guild_count()
-            except Exception:
-                pass
-            await asyncio.sleep(1800)
+                print(f"{datetime.datetime.now()} > Server count successfully updated ({len(bot.guilds)})")
+                print("")
+            except NameError:
+                print(f"{datetime.datetime.now()} > Failed to update server count")
+                print("")
+            await asyncio.sleep(600)
 
-        return 0
+        else:
+            self.updating = self.bot.loop.create_task(self.update_stats())
+
+    @commands.command()
+    @commands.is_owner()
+    async def updatestart(self, ctx):
+        """Starts the update loop manually"""
+        self.updating = self.bot.loop.create_task(self.update_stats())
+        await ctx.send("Loop successfully restarted")
 
 class Core(commands.Cog):
 
@@ -102,8 +138,7 @@ class Core(commands.Cog):
         -   a valid ID
         -   a valid message link"""
 
-        with open("Settings/Settings.json", "r") as file:
-            settings_trophy = json.load(file)
+        settings_trophy = load_settings()
 
         message = await commands.MessageConverter().convert(ctx, message)
 
@@ -151,16 +186,23 @@ class Core(commands.Cog):
 
         try:
             await ctx.send("This bot lets you react to a certain message with an emoji (default :trophy:) and post it into a "
-                           "custom starboard channel. You are completely free in customization whatsoever.\n"
-                           "You find the link to my help page by clicking 'watch' on my profile or by using this link: https://www.twitch.tv/quotebot_5599\n\n"
-                           ":warning: If it doesnt work when reacting to a message, make sure you checked the following:\n"
-                           "- First, make sure the bot is able to __**VIEW**__ the channel it is supposed to create embeds of (general chat, etc)\n"
-                           "- Second, make sure that the one who created the message did not react to it. On default, the bot ignores it but you can"
-                           " change that behaviour\n"
-                           "- Third, make sure you are not writing and reacting in the channel the bot is posting the embeds. If you react there, the"
-                           " reactions get ignored too\n\n"
-                           "If you still have troubles setting up the bot, please refer to the support server (can be found with ``!vote``, you dont need"
-                           " to vote, I just dont want to advertise my server here)")
+                           "custom starboard channel. You are completely free in customization whatsoever.\n```python\n"
+                           "!trophy {'message_id'/'message_link'}: Does the quotation automatically.\n"
+                           ">>> 'Requires manage message permissions'\n\n"
+                           "'!invite': Shows an invite link for this bot.\n\n"
+                           "'!vote': Shows a vote link for this bot\n\n"
+                           "'!setchannel' in your preferred channel or '!setchannel {channel_mention/channel_id}': Type this to set up your starboard.\n"
+                           ">>> 'Requires Manage message permissions'\n\n"
+                           "'!setemoji {emoji}': Set up your own reaction emoji. Can also be a custom one.\n"
+                           ">>> 'Requires Manage emojis permissions'\n\n"
+                           "'!setminreact {threshold}': Set up the threshold.\n"
+                           ">>> 'Requires Manage channels permissions'\n\n"
+                           "'!setownreact {on/off}': If turned on, the message author can also react to his own message.\n"
+                           ">>> 'Requires Manage channels permissions'\n\n"
+                           "'!whitelist {role}': Add a role that is whitelisted for reacting to messages. If left blank, the whitelist gets cleared\n"
+                           ">>> 'Requires Manage roles permissions'\n\n"
+                           "'!settings': Shows the current settings for this guild.\n"
+                           "```")
         except discord.Forbidden:
             return 0
 
@@ -176,7 +218,7 @@ class Customizing(commands.Cog):
     @commands.has_permissions(manage_channels=True)
     @commands.bot_has_permissions(send_messages=True)
     @commands.cooldown(1, 2, commands.BucketType.default)
-    async def setchannel(self, ctx):
+    async def setchannel(self, ctx, channel="0"):
         """Lets a user define the quotes channel
 
         Usage
@@ -185,13 +227,17 @@ class Customizing(commands.Cog):
 
         settings_setchannel = load_settings()
 
-        settings_setchannel[f"{ctx.guild.id}"]["channel_id"] = ctx.channel.id
+        if channel == "0":
+            channel = ctx.channel
+        else:
+            channel = await commands.TextChannelConverter().convert(ctx, channel)
 
-        with open("Settings/Settings.json", "w") as file:
-            json.dump(settings_setchannel, file, indent=4, sort_keys=True)
+        settings_setchannel[f"{ctx.guild.id}"]["channel_id"] = channel.id
+
+        save_settings(settings_setchannel)
 
         try:
-            await ctx.send(f"New quotes channel successfully set to {ctx.channel.mention}")
+            await ctx.send(f"New quotes channel successfully set to <#{channel.id}>")
         except discord.Forbidden:
             return 0
 
@@ -217,8 +263,7 @@ class Customizing(commands.Cog):
 
         settings_setemoji[f"{ctx.guild.id}"]["emoji"] = emoji
 
-        with open("Settings/Settings.json", "w") as file:
-            json.dump(settings_setemoji, file, indent=4, sort_keys=True)
+        save_settings(settings_setemoji)
 
         try:
             await ctx.send(f"New reaction emoji successfully set to {emoji}")
@@ -246,8 +291,7 @@ class Customizing(commands.Cog):
             await ctx.send(f"{minimum} is not a number above zero")
             return 0
 
-        with open("Settings/Settings.json", "w") as file:
-            json.dump(settings_minreact, file, indent=4, sort_keys=True)
+        save_settings(settings_minreact)
 
         try:
             await ctx.send(f"Minimum amount of reactions successfully set to {minimum}")
@@ -276,8 +320,7 @@ class Customizing(commands.Cog):
             settings_setownreact[f"{ctx.guild.id}"]["react_to_own"] = 0
             reply = "off"
 
-        with open("Settings/Settings.json", "w") as file:
-            json.dump(settings_setownreact, file, indent=4, sort_keys=True)
+        save_settings(settings_setownreact)
 
         try:
             await ctx.send(f"Self reacting successfully turned {reply}")
@@ -287,16 +330,51 @@ class Customizing(commands.Cog):
         return 0
 
     @commands.command()
+    @commands.has_permissions(manage_roles=True)
+    @commands.bot_has_permissions(send_messages=True)
+    @commands.cooldown(1, 2, commands.BucketType.default)
+    async def whitelist(self, ctx, role="0"):
+        """Whitelists roles to react
+
+        Usage: !setrole {role}"""
+
+        settings_setroles = load_settings()
+
+        if role == "0":
+            settings_setroles[f"{ctx.guild.id}"]["allowed_roles"] = []
+
+            try:
+                await ctx.send("All role whitelists cleared")
+            except discord.Forbidden:
+                return 0
+
+        else:
+            role = await commands.RoleConverter().convert(ctx, role)
+            settings_setroles[f"{ctx.guild.id}"]["allowed_roles"].append(role.id)
+
+            try:
+                await ctx.send(f"Role '{role.name}' succesfully whitelisted")
+            except discord.Forbidden:
+                return 0
+
+        save_settings(settings_setroles)
+
+
+    @commands.command()
     @commands.bot_has_permissions(send_messages=True, embed_links=True)
     @commands.cooldown(1, 2, commands.BucketType.default)
     async def settings(self, ctx):
         """Shows the current settings for the server triggered in"""
 
         settings_settings = load_settings()
+        rolelist = []
 
         channel = settings_settings[f"{ctx.guild.id}"]["channel_id"]
         emoji = settings_settings[f"{ctx.guild.id}"]["emoji"]
         threshold = settings_settings[f"{ctx.guild.id}"]["threshold"]
+
+        for role in settings_settings[f"{ctx.guild.id}"]["allowed_roles"]:
+            rolelist.append(f"<@&{role}>")
 
         if settings_settings[f"{ctx.guild.id}"]["react_to_own"] == 0:
             selfreact = ":regional_indicator_x:"
@@ -311,6 +389,12 @@ class Customizing(commands.Cog):
                         f"Can react to own message: {selfreact}",
             color=ctx.author.color
         )
+        if len(rolelist) > 0:
+            settings_embed.add_field(
+                name="**Roles:**",
+                value=f"{' '.join(rolelist)}",
+                inline=False
+            )
 
         settings_embed.set_author(
             name=ctx.author.name,
@@ -330,11 +414,17 @@ def load_settings():
         settings = json.load(file)
     return settings
 
+#saves the settings
+def save_settings(settings):
+    with open("Settings/Settings.json", "w") as file:
+        json.dump(settings, file, indent=4, sort_keys=True)
+
 
 # Generates the message embed
 async def embed_message(guild: discord.Guild, message: discord.Message):
     settings = load_settings()
 
+    # prevent the message from being sent again
     if message.id in settings[f"{guild.id}"]["quoted_messages"]:
         return 0
 
@@ -344,33 +434,31 @@ async def embed_message(guild: discord.Guild, message: discord.Message):
     else:
         emoji = "💻"
 
-    # Embed body
+
+    # Embed body for messages with content
     msg_embed = discord.Embed(
         title=f"In #{message.channel} via {emoji}",
         description=f"[Jump to message]({message.jump_url})",
         color=message.author.color,
         timestamp=message.created_at
     )
-
     # If message contains an invite
     if message.activity is not None:
         msg_embed.add_field(
             name="Invite",
-            value=message.activity["party_id"]
+            value=message.activity["party_id"],
+            inline=False
         )
-
     # Embed footer
     msg_embed.set_footer(
         text=message.id
     )
-
     # if message contains text
     if message.content != "":
         msg_embed.add_field(
             name=f"Content:",
             value=f"{message.content}"
         )
-
     # If message contains pictures or videos
     for file in message.attachments:
         if not file.filename.endswith((".mp4", ".ogg", ".m4a", ".webm", ".ovm")):
@@ -380,7 +468,6 @@ async def embed_message(guild: discord.Guild, message: discord.Message):
                 name=file.filename,
                 value=file.url
             )
-
     # Embed author
     msg_embed.set_author(
         name=str(message.author),
@@ -389,14 +476,14 @@ async def embed_message(guild: discord.Guild, message: discord.Message):
 
     channel = discord.utils.get(guild.text_channels, id=settings[f"{guild.id}"]["channel_id"])
     try:
+
         await channel.send(embed=msg_embed)
     except discord.Forbidden:
         return 0
 
     # prevent the message from being sent again
     settings[f"{guild.id}"]["quoted_messages"].append(message.id)
-    with open("Settings/Settings.json", "w") as file:
-        json.dump(settings, file, indent=4, sort_keys=True)
+    save_settings(settings)
 
     return 0
 
@@ -445,28 +532,44 @@ def setup(discord_bot):
     discord_bot.add_cog(DiscordBotsOrgAPI(discord_bot))
 
 
-setup(bot)
-
-
 #############################
 # Events:                   #
+# on_connect                #
+# on_disconnect             #
 # on_ready                  #
 # on_reaction_add           #
 # on_guild_join             #
 # on_guild_remove           #
+# on_error                  #
+# on_command                #
 # on_command_error          #
 #############################
 
 @bot.event
+async def on_connect():
+    print(f"{datetime.datetime.now()} > Client successfully connected to the API server")
+
+
+@bot.event
+async def on_disconnect():
+    print(f"{datetime.datetime.now()} > Client disconnected or failed to connect to the API server")
+    print("")
+
+
+@bot.event
 async def on_ready():
-    print("logged in successfully")
+    print(f"{datetime.datetime.now()} > Client activated and ready")
+    print("")
     await bot.change_presence(
-        activity=discord.Activity(name='React with 🏆 | !help', type=1, url="https://www.twitch.tv/quotebot_5599"))
+        activity=discord.Activity(name='React with 🏆 | !help', type=0))
+    setup(bot)
 
 
 @bot.event
 async def on_reaction_add(reaction, member):
     settings = load_settings()
+    roles = member.roles
+    counter = 0
 
     # if the reaction is in the quote channel, it will get ignored
     if reaction.message.channel.id == settings[f"{reaction.message.guild.id}"]["channel_id"]:
@@ -480,11 +583,21 @@ async def on_reaction_add(reaction, member):
     else:
         emoji = discord.utils.get(reaction.message.guild.emojis, id=int(emoji.split(":")[-1].split(">")[0]))
 
-    count = reaction.count
     # if the message author reacts and the guild specified it before, it gets ignored,
-    if settings[f"{reaction.message.guild.id}"]["react_to_own"] == 0:
-        users = await reaction.users().flatten()
-        if reaction.message.author in users:
+    # same as when none of the roles of a user are not whitelisted
+    count = reaction.count
+    users = await reaction.users().flatten()
+
+    for user in users:
+        if settings[f"{reaction.message.guild.id}"]["react_to_own"] == 0:
+            if user == reaction.message.author:
+                count -= 1
+
+        for role in roles:
+            if role.id not in settings[f"{reaction.message.guild.id}"]["allowed_roles"]:
+                counter += 1
+
+        if counter == (len(roles)+1):
             count -= 1
 
     if reaction.emoji == emoji and count == settings[f"{reaction.message.guild.id}"]["threshold"]:
@@ -513,25 +626,21 @@ async def on_reaction_add(reaction, member):
 @bot.event
 async def on_guild_join(guild):
 
-    with open("Settings/Settings.json", "r") as f_file:
-        s_settings = json.load(f_file)
+    s_settings = load_settings()
 
-        threshold = 3
-
-        new_guild_dict = {f"{guild.id}":
-            {
-                "channel_id": 0,
-                "emoji": ":trophy:",
-                "threshold": threshold,
-                "quoted_messages": [],
-                "react_to_own": 0
-            }
+    new_guild_dict = {f"{guild.id}":
+        {
+            "allowed_roles": [],
+            "channel_id": 0,
+            "emoji": ":trophy:",
+            "threshold": 3,
+            "quoted_messages": [],
+            "react_to_own": 0
         }
-        s_settings.update(new_guild_dict)
+    }
+    s_settings.update(new_guild_dict)
 
-
-    with open("Settings/Settings.json", "w") as f_file:
-        json.dump(s_settings, f_file, indent=4, sort_keys=True)
+    save_settings(s_settings)
 
     await create_log_embed("add", guild, s_settings)
 
@@ -547,28 +656,44 @@ async def on_guild_remove(guild):
     s_settings = load_settings()
     del s_settings[f"{guild.id}"]
 
-    with open("Settings/Settings.json", "w") as f_file:
-        json.dump(s_settings, f_file, indent=4, sort_keys=True)
+    save_settings(s_settings)
 
     await create_log_embed("remove", guild, s_settings)
 
     return 0
 
+#############################
+# Errors during the runtime #
+#############################
 
-#########################################
-# Errors get retuned via the bot/client #
-#########################################
+@bot.event
+async def on_error(event, arg, kwarg):
+    del arg, kwarg
+    print(f"{datetime.datetime.now()} > An error ocurred in {event}:")
+    print(f"{sys.exc_info()[0]}, {sys.exc_info()[1]}")
+    print("")
+
+###########################################
+# Commands handled by the discord.ext lib #
+###########################################
+
+@bot.event
+async def on_command(ctx):
+    print(f"{datetime.datetime.now()} [COMMAND]: In guild '{ctx.guild.name}'({ctx.guild.id}):\n{ctx.message.content}")
+    print("")
+
+
+#################################################
+# Command errors handled by the discord.ext lib #
+#################################################
 
 @bot.event
 async def on_command_error(ctx, error):
     if ctx.command is not None:
+        print(f"{datetime.datetime.now()} [COMMAND]: In guild '{ctx.guild.name}'({ctx.guild.id}):\n{ctx.message.content}")
+        print("")
         try:
-            await ctx.send(f"[COMMAND ERROR]: During handling of command '{ctx.command.name}' in guild {ctx.guild.id} happened following error: \n{error}\n")
-        except discord.Forbidden:
-            return 0
-    else:
-        try:
-            await ctx.send(f"[COMMAND ERROR]: command '{ctx.message.content}' not found\n")
+            await ctx.send(f"[COMMAND ERROR]: During handling of command '{ctx.command.name}' happened following error: \n> {error}\n")
         except discord.Forbidden:
             return 0
 
@@ -580,6 +705,7 @@ async def on_command_error(ctx, error):
 #####################
 
 async def bot_start():
+    print(f"{datetime.datetime.now()} > Trying to connect to the API server...")
     await bot.start(bottoken.token())
 
 
